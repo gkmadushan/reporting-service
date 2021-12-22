@@ -51,12 +51,13 @@ def get_by_filter(page: Optional[str] = 1, limit: Optional[int] = 10, commons: d
         r.name as resource, r.ipv4, r.ipv6, r.os,
         e.name as environment, e.description, e.group_id,
         (SELECT count(*) FROM result WHERE scan_id = s.id AND status = True) as issues
-        from scan s
-        inner join resource r ON r.id = s.reference
+        from resource r 
+        inner join scan s ON s.reference = r.id and s.id = (SELECT id FROM scan x where x.reference = r.id and x.ended_at is not null order by x.ended_at desc limit 1)
         inner join environment e ON e.id = r.environment_id
         inner join scan_status ss ON ss.id = s.scan_status_id
         WHERE
         ss.code = 'ENDED'
+        order by s.ended_at desc
         """
     if resource:
         sql = sql + f"""and r.id = :resource """
@@ -114,6 +115,7 @@ def get_by_id(id: str, commons: dict = Depends(common_params), db: Session = Dep
             INNER JOIN scan_status ss ON ss.id = s.scan_status_id
             WHERE res.environment_id = e.id and r.status = True and ss.code = 'ENDED'
             and r.score in ('High', 'Critical')
+            and s.id in (select id from scan p where p.reference = res.id and p.ended_at is not null order by p.ended_at desc limit 1)
         ) as high,
         (
             SELECT COUNT(*) FROM result r
@@ -122,6 +124,7 @@ def get_by_id(id: str, commons: dict = Depends(common_params), db: Session = Dep
             INNER JOIN scan_status ss ON ss.id = s.scan_status_id
             WHERE res.environment_id = e.id and r.status = True and ss.code = 'ENDED'
             and r.score = 'Medium'
+            and s.id in (select id from scan p where p.reference = res.id and p.ended_at is not null order by p.ended_at desc limit 1)
         ) as medium,
         (
             SELECT COUNT(*) FROM result r
@@ -130,6 +133,7 @@ def get_by_id(id: str, commons: dict = Depends(common_params), db: Session = Dep
             INNER JOIN scan_status ss ON ss.id = s.scan_status_id
             WHERE res.environment_id = e.id and r.status = True and ss.code = 'ENDED'
             and r.score in ('Low', 'None','low')
+            and s.id in (select id from scan p where p.reference = res.id and p.ended_at is not null order by p.ended_at desc limit 1)
         ) as low
         from environment e
         where e.id = :id
@@ -248,8 +252,9 @@ def get_by_id(id: str, commons: dict = Depends(common_params), db: Session = Dep
     return StreamingResponse(pdf_output, media_type='application/pdf')
 
 
-@router.get("/{id}")
+@router.get("/scans/{id}")
 def get_by_id(id: str, accept: Optional[str] = Header(None), commons: dict = Depends(common_params), db: Session = Depends(get_db)):
+
     sql = f"""
         select r.id, r.scan_id, c.name as class_name, r.title, r.description, r.score, r.fix_available, r.impact
         from result r
@@ -274,9 +279,9 @@ def get_by_id(id: str, accept: Optional[str] = Header(None), commons: dict = Dep
         s.started_at, s.ended_at, null as created_by,
         r.name as resource, r.ipv4, r.ipv6, r.os,
         e.name as environment, e.description, e.group_id,
-        (SELECT count(*) FROM result WHERE scan_id = s.id AND status = True AND score = 'High') as high_sev_issues,
+        (SELECT count(*) FROM result WHERE scan_id = s.id AND status = True AND score in ('High', 'Critical')) as high_sev_issues,
         (SELECT count(*) FROM result WHERE scan_id = s.id AND status = True AND score = 'Medium') as medium_sev_issues,
-        (SELECT count(*) FROM result WHERE scan_id = s.id AND status = True AND score = 'Low') as low_sev_issues
+        (SELECT count(*) FROM result WHERE scan_id = s.id AND status = True AND score in('Low', 'low', 'None')) as low_sev_issues
         from scan s
         inner join resource r ON r.id = s.reference
         inner join environment e ON e.id = r.environment_id
