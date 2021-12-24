@@ -56,13 +56,13 @@ def get_by_filter(page: Optional[str] = 1, limit: Optional[int] = 10, commons: d
         inner join environment e ON e.id = r.environment_id
         inner join scan_status ss ON ss.id = s.scan_status_id
         WHERE
-        ss.code = 'ENDED'
-        order by s.ended_at desc
+        ss.code = 'ENDED'        
         """
     if resource:
         sql = sql + f"""and r.id = :resource """
     if environment:
         sql = sql + f"""and e.id = :environment """
+    sql = sql + f""" order by s.ended_at desc """
     sql = sql + f""" LIMIT :limit OFFSET(:offset) """
 
     result = db.execute(text(sql), {"resource": resource, "environment": environment,
@@ -76,12 +76,12 @@ def get_by_filter(page: Optional[str] = 1, limit: Optional[int] = 10, commons: d
     # counts
     sql = f"""
         select count(*)
-        from scan s
-        inner join resource r ON r.id = s.reference
+        from resource r 
+        inner join scan s ON s.reference = r.id and s.id = (SELECT id FROM scan x where x.reference = r.id and x.ended_at is not null order by x.ended_at desc limit 1)
         inner join environment e ON e.id = r.environment_id
         inner join scan_status ss ON ss.id = s.scan_status_id
         WHERE
-        ss.code = 'ENDED'
+        ss.code = 'ENDED'   
         """
     if resource:
         sql = sql + f"""and r.id = '{resource}'"""
