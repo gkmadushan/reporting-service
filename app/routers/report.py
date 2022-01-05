@@ -1,3 +1,4 @@
+# coding: utf8
 from sqlalchemy.sql.sqltypes import DateTime
 from sqlalchemy.exc import IntegrityError
 from starlette.responses import Response
@@ -26,7 +27,7 @@ from fastapi.responses import StreamingResponse
 import io
 import datetime
 import pandas as pd
-import io
+import os
 
 
 page_size = os.getenv('PAGE_SIZE')
@@ -132,7 +133,7 @@ def get_by_id(id: str, commons: dict = Depends(common_params), db: Session = Dep
             INNER JOIN resource res ON res.id = s.reference
             INNER JOIN scan_status ss ON ss.id = s.scan_status_id
             WHERE res.environment_id = e.id and r.status = True and ss.code = 'ENDED'
-            and r.score in ('Low', 'None','low')
+            and r.score not in ('High', 'Critical','Medium')
             and s.id in (select id from scan p where p.reference = res.id and p.ended_at is not null order by p.ended_at desc limit 1)
         ) as low
         from environment e
@@ -281,7 +282,7 @@ def get_by_id(id: str, accept: Optional[str] = Header(None), commons: dict = Dep
         e.name as environment, e.description, e.group_id,
         (SELECT count(*) FROM result WHERE scan_id = s.id AND status = True AND score in ('High', 'Critical')) as high_sev_issues,
         (SELECT count(*) FROM result WHERE scan_id = s.id AND status = True AND score = 'Medium') as medium_sev_issues,
-        (SELECT count(*) FROM result WHERE scan_id = s.id AND status = True AND score in('Low', 'low', 'None')) as low_sev_issues
+        (SELECT count(*) FROM result WHERE scan_id = s.id AND status = True AND score not in ('High', 'Critical', 'Medium')) as low_sev_issues
         from scan s
         inner join resource r ON r.id = s.reference
         inner join environment e ON e.id = r.environment_id
@@ -297,7 +298,13 @@ def get_by_id(id: str, accept: Optional[str] = Header(None), commons: dict = Dep
     excel_data = []
 
     for row in result:
-        results.append(row)
+        data = {'references': []}
+        sql = f"""select * from reference where result_id = '{row['id']}'"""
+        references = db.execute(text(sql))
+        for ref in references:
+            data['info'] = row
+            data['references'].append(ref)
+        results.append(data)
         excel_data.append({'type': row['class_name'], 'title': row['title'],
                           'description': row['description'], 'severity': row['score']})
 
@@ -343,6 +350,7 @@ def get_by_id(id: str, accept: Optional[str] = Header(None), commons: dict = Dep
                 self.cell(0, 10, f"Page {self.page_no()}/{{nb}}", 0, 0, "R")
 
         pdf = PDF('P', 'mm', 'A4')
+        # pdf.add_font('DejaVu', fname=os.path.join('/usr/share/fonts/truetype/dejavu', 'DejaVuSans.ttf'), uni=True)
         pdf.alias_nb_pages()
         pdf.add_page()
         pdf.override_header('Vulnerability Scan Report', (scan_details.ended_at-datetime.timedelta(hours=+5.5)).strftime(
@@ -412,9 +420,36 @@ def get_by_id(id: str, accept: Optional[str] = Header(None), commons: dict = Dep
         pdf.ln(8)
         for res in results:
             pdf.set_font("Times", size=12)
-            pdf.cell(30, 8, res.score, 1, 0, 'C')
-            pdf.cell(120, 8, res.title, 1, 0)
-            pdf.cell(40, 8, res.class_name, 1, 0, 'C')
+            if 'info' in res.keys():
+                pdf.cell(30, 8, res['info']['score'], 1, 0, 'C')
+                pdf.cell(120, 8, res['info']['title'], 1, 0)
+                pdf.cell(40, 8, res['info']['class_name'], 1, 0, 'C')
+                pdf.ln(8)
+
+        pdf.add_page()
+        pdf.set_font("Times", size=15, style='B')
+        pdf.cell(0, 10, 'DEVOPS INFO')
+        pdf.ln(8)
+        for res in results:
+            if 'info' in res.keys():
+                pdf.set_font("Times", size=12, style="B")
+                pdf.cell(30, 8, res['info']['title']+' ({})'.format(res['info']['class_name']), 0, 0)
+                pdf.ln(8)
+                pdf.set_font("Times", size=12)
+                pdf.multi_cell(190, 5, res['info']['description'].encode(
+                    'latin-1', 'replace').decode('latin-1'), 0, 'J')
+                pdf.ln(1)
+
+            if 'references' in res.keys():
+                pdf.set_font("Times", size=12)
+                for referance in res['references']:
+                    pdf.cell(30, 8, referance['type_code']+' '+referance['code'], 0, 0)
+                    if referance['url'] != None:
+                        pdf.set_font("Times", size=12, style="U")
+                        pdf.ln(4)
+                        pdf.cell(30, 8, referance['url'].encode(
+                            'latin-1', 'replace').decode('latin-1'), 0, 0)
+                    pdf.ln(8)
             pdf.ln(8)
 
         pdf_output = io.BytesIO(bytes(pdf.output(dest='S')))
