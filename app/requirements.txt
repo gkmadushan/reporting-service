@@ -87,3 +87,4 @@ websockets==8.1
 wrapt==1.12.1
 XlsxWriter==3.0.2
 zipp==3.6.0
+fastapi-route-logger-middleware==0.2.3
