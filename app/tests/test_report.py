@@ -26,7 +26,7 @@ def test_get_report_404():
 
 
 def test_get_report_200():
-    reports = response = client.get("/v1/reports")
+    reports = client.get("/v1/reports")
     sample_id = reports.json()['data'][0]['id']
     response = client.get("/v1/reports/scans/{}".format(sample_id))
     assert response.status_code == 200

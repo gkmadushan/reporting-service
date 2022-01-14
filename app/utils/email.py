@@ -12,23 +12,24 @@ smtp_port = os.getenv('EMAIL_PORT')
 smtp_username = os.getenv('EMAIL_USERNAME')
 smtp_password = os.getenv('EMAIL_PASSWORD')
 
-def send_email(to, subject, msg, html = False):
+
+def send_email(to, subject, msg, html=False):
     receivers = ['gkmadushan@gmail.com']
     message = MIMEMultipart('alternative')
     message['Subject'] = subject
     message['From'] = sender
     message['To'] = to
     message.attach(MIMEText(msg, 'plain'))
-    if html!=False:
+    if html != False:
         message.attach(MIMEText(html, 'html'))
 
     try:
-        smtpObj = SMTP(smtp_host, smtp_port)
-        smtpObj.starttls()
-        smtpObj.ehlo()
-        smtpObj.login(smtp_username, smtp_password) 
-        smtpObj.sendmail(sender, receivers, message.as_string())      
-        smtpObj.quit();   
+        smtp_driver = SMTP(smtp_host, smtp_port)
+        smtp_driver.starttls()
+        smtp_driver.ehlo()
+        smtp_driver.login(smtp_username, smtp_password)
+        smtp_driver.sendmail(sender, receivers, message.as_string())
+        smtp_driver.quit()
         return True
     except SMTPException as e:
         return e

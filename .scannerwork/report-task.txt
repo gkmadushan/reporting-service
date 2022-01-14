@@ -1,0 +1,6 @@
+projectKey=SecOps-ReportingService
+serverUrl=http://localhost:8180
+serverVersion=9.2.4.50792
+dashboardUrl=http://localhost:8180/dashboard?id=SecOps-ReportingService
+ceTaskId=AX5FV-Slnpx-DzHdZPJ6
+ceTaskUrl=http://localhost:8180/api/ce/task?id=AX5FV-Slnpx-DzHdZPJ6

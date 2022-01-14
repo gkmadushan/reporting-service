@@ -35,15 +35,12 @@ page_size = os.getenv('PAGE_SIZE')
 router = APIRouter(
     prefix="/v1/reports",
     tags=["ReportingAPIs"],
-    # dependencies=[Depends(get_token_header)],
     responses={404: {"description": "Not found"}},
 )
 
 
 @router.get("")
 def get_by_filter(page: Optional[str] = 1, limit: Optional[int] = 10, commons: dict = Depends(common_params), db: Session = Depends(get_db), resource: Optional[str] = None, environment: Optional[str] = None):
-    filters = []
-
     sql = f"""
         select
         ROW_NUMBER () OVER (ORDER BY s.started_at) as index,
@@ -161,8 +158,6 @@ def get_by_id(id: str, commons: dict = Depends(common_params), db: Session = Dep
     for row in result:
         results.append(row)
 
-    # return results
-
     class PDF(FPDF):
         def override_header(self, title, completed_at, type, user):
             self.image("./templates/assets/logo.png", w=30, x=10, y=12)
@@ -277,7 +272,7 @@ def get_by_id(id: str, accept: Optional[str] = Header(None), commons: dict = Dep
 
     sql = f"""
         select
-        s.started_at, s.ended_at, null as created_by,
+        s.started_at, s.ended_at, s.created_by as created_by,
         r.name as resource, r.ipv4, r.ipv6, r.os,
         e.name as environment, e.description, e.group_id,
         (SELECT count(*) FROM result WHERE scan_id = s.id AND status = True AND score in ('High', 'Critical')) as high_sev_issues,
